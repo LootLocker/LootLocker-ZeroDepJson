@@ -22,7 +22,9 @@ using System.Xml.Serialization;
 #pragma warning disable CA1031 // Do not catch general exception types
 #pragma warning disable CA1034 // Nested types should not be visible
 
-namespace ZeroDep
+namespace LootLocker
+{
+namespace ZeroDepJson
 {
     /// <summary>
     /// A utility class to serialize and deserialize JSON.
@@ -1086,11 +1088,6 @@ namespace ZeroDep
             {
                 reader.Read();
                 var s = ReadString(reader, options);
-                if (options.SerializationOptions.HasFlag(JsonSerializationOptions.AutoParseDateTime))
-                {
-                    if (TryParseDateTime(s, options.DateTimeStyles, out var dt))
-                        return dt;
-                }
                 return s;
             }
 
@@ -3020,8 +3017,8 @@ namespace ZeroDep
 
             if (str.Length != text.Length)
                 return false;
-
-            return string.Compare(str, text, StringComparison.OrdinalIgnoreCase) == 0;
+            
+            return string.Compare(str, text, StringComparison.OrdinalIgnoreCase) == 0 || /*Recover from different casing (Snake_Case to CamelCase)*/ string.Compare(str, text.Replace("_", ""), StringComparison.OrdinalIgnoreCase) == 0;
         }
 
         private static string Nullify(this string str)
@@ -3143,7 +3140,10 @@ namespace ZeroDep
 
                 foreach (var def in _deserializationMembers)
                 {
-                    if (string.Compare(def.WireName, key, StringComparison.OrdinalIgnoreCase) == 0)
+                    if (EqualsIgnoreCase(def.WireName, key))
+                        return def;
+                    // Recover from different casing (Snake_Case to CamelCase)
+                    if (string.Compare(def.WireName, key.Replace("_", ""), StringComparison.OrdinalIgnoreCase) == 0)
                         return def;
                 }
                 return null;
@@ -4856,12 +4856,25 @@ namespace ZeroDep
         }
 
         /// <summary>
-        /// Gets a value indicating the current serialization level.
+        /// Initializes a new instance of the <see cref="JsonOptions" /> class.
         /// </summary>
-        /// <value>
-        /// The current serialization level.
-        /// </value>
-        public int SerializationLevel { get; internal set; }
+        public JsonOptions(JsonSerializationOptions serializationOptions, string formattingTab = " ")
+        {
+            SerializationOptions = serializationOptions;
+            ThrowExceptions = true;
+            DateTimeStyles = _defaultDateTimeStyles;
+            FormattingTab = formattingTab;
+            StreamingBufferChunkSize = ushort.MaxValue;
+            MaximumExceptionsCount = 100;
+        }
+
+            /// <summary>
+            /// Gets a value indicating the current serialization level.
+            /// </summary>
+            /// <value>
+            /// The current serialization level.
+            /// </value>
+            public int SerializationLevel { get; internal set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether exceptions can be thrown during serialization or deserialization.
@@ -5041,7 +5054,7 @@ namespace ZeroDep
         }
 
         internal int FinalStreamingBufferChunkSize => Math.Max(512, StreamingBufferChunkSize);
-        internal IDictionary<object, object> FinalObjectGraph => ObjectGraph ?? new Dictionary<object, object>(ZeroDep.Json.ReferenceComparer.Instance);
+        internal IDictionary<object, object> FinalObjectGraph => ObjectGraph ?? new Dictionary<object, object>(Json.ReferenceComparer.Instance);
 
         /// <summary>
         /// Clones this instance.
@@ -5432,7 +5445,7 @@ namespace ZeroDep
         /// The default value.
         /// </summary>
         Default = UseXmlIgnore | UseScriptIgnore | SerializeFields | AutoParseDateTime | UseJsonAttribute | SkipGetOnly | SkipDefaultValues | SkipZeroValueTypes | SkipNullPropertyValues | SkipNullDateTimeValues,
-    }
+        }
 
     /// <summary>
     /// The exception that is thrown when a JSON error occurs.
@@ -5529,4 +5542,5 @@ namespace ZeroDep
 #pragma warning restore IDE0090 // Use 'new(...)'
 #pragma warning restore IDE0063 // Use simple 'using' statement
 
+}
 }
